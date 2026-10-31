@@ -1,0 +1,4 @@
+interface:
+  display_name: "收录其他词汇（独立版）"
+  short_description: "只收录指定 ChatGPT 对话起点之后的新目标词并同步私人词库"
+  default_prompt: "使用 $vocab-kit-other 收录其他词汇并同步到私人网站。"

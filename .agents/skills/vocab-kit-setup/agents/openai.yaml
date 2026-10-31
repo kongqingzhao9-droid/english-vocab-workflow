@@ -1,0 +1,4 @@
+interface:
+  display_name: "配置私人生词本"
+  short_description: "为 Windows Codex 配置 OneDrive 来源、对话起点和空白私人网站"
+  default_prompt: "使用 $vocab-kit-setup 帮我初始化自己的私人生词本。"
