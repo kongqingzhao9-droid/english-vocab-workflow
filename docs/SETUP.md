@@ -1,14 +1,14 @@
 # 初始化操作手册
 
-本文件供 Codex 执行，测试者可以直接让 setup skill 带着做。所有命令在本项目根目录运行。下文 `python` 代表本项目 `.venv/Scripts/python.exe -B`。
+本文件供 Codex 执行，测试者可以直接让 setup skill 带着做。优先使用 [插件流程](PLUGIN_SETUP.md)，本页也提供插件未就绪时的手动操作。所有命令在本项目根目录运行。下文 `python` 代表本项目 `.venv/Scripts/python.exe -B`。
 
 ## 1. 环境和来源
 
 运行 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/bootstrap.ps1 -InstallDependencies`。它只创建本目录的虚拟环境和空词库，不安装或覆盖全局 skill。doctor 会报告 Python、PyMuPDF、Git、Tesseract 和 OneDrive 候选路径。Git 是发布网站所需；Tesseract 用于 OCR 补查。缺失项由 Codex 依据实际环境协助安装，不盲目重装。
 
-向用户确认 OneDrive 本机同步文件夹，可在其选择的 OneDrive 根目录下创建“英语生词本/待收录PDF”。此版本读取本机路径，不支持仅有云端分享链接的目录。设置“始终保留在此设备上”，等待同步完成再收录。
+先问“请告诉我您在云盘内用于存放pdf的文件夹名称”，收到回复后用 find-pdf-folder 在本机 OneDrive 同步目录查找。找到并确认后，单独索要原始查词对话链接。用 pin-sources 将两项固定在 setup skill 的本机专用 .local/sources.json 中。将 PDF 目录设为“始终保留在此设备上”，等待同步完成再收录。
 
-向用户获取日常询词对话原始链接，形如 `https://chatgpt.com/c/<UUID>`。不能使用 `/share/` 快照链接。用当前 Codex 的 read_thread 工具读取最新可访问消息的时间与 ID，先保留这条真实来源边界；不提取历史词。
+向用户获取日常询词对话原始链接，形如 `https://chatgpt.com/c/<UUID>`。不能使用 `/share/` 快照链接。用当前 Codex 的 read_thread 工具读取最新用户消息的真实 ID，立即执行 record-start 保存来源边界。只有确有逐条消息时间时才保存时间。首次只记录起点。
 
 ## 2. 创建独立私人数据库
 
@@ -19,8 +19,7 @@
 获取项目 URL 与 publishable 公钥（也支持旧 anon 公钥）。拒绝 secret key、service_role、数据库密码。执行：
 
 ```powershell
-python scripts/vocab.py configure --pdf-directory "用户选择的OneDrive绝对路径" --conversation "原始ChatGPT对话链接" --supabase-url "https://项目引用.supabase.co" --public-key "用户项目公钥" --owner-id "本人UserUID"
-python scripts/vocab.py record-start --timestamp "最新来源消息的UTC时间" --message-id "该消息ID"
+python scripts/vocab.py configure --supabase-url "https://项目引用.supabase.co" --public-key "用户项目公钥" --owner-id "本人UserUID"
 python scripts/vocab.py prepare
 ```
 

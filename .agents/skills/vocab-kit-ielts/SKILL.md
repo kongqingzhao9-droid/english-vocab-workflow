@@ -1,9 +1,9 @@
 ---
 name: vocab-kit-ielts
-description: 在已配置的本生词本工作流项目中，用户主动说“收录雅思词汇”“处理新文件”“处理雅思”时，从其 OneDrive 文件夹收录标注 PDF 的生词、短语和长难句并上传私人网站。不处理其他生词本项目，不定时检测。
+description: 在已配置的本生词本工作流项目中，用户主动说“收录试卷词汇”“处理新文件”“处理试卷”时，从其 OneDrive 文件夹收录标注 PDF 的生词、短语和长难句并上传私人网站。不处理其他生词本项目，不定时检测。
 ---
 
-# 收录雅思词汇
+# 收录试卷词汇
 
 由本文件向上四级定位项目根目录，读 AGENTS.md 和 docs/ENTRY_SCHEMA.md。所有命令在这个根目录执行，解释器为 `.venv/Scripts/python.exe -B`。检查 `.local/config.json`、`.local/state.json`，未初始化时引导使用本项目 setup skill，不借用外部词库或已安装的旧 skill。
 

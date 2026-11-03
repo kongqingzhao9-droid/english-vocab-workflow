@@ -41,7 +41,7 @@ def package(output):
         raise ValueError('Write the release ZIP outside the working project.')
     files = source_files()
     output.parent.mkdir(parents=True, exist_ok=True)
-    prefix = 'vocab-workflow-windows-v0.1.0'
+    prefix = 'vocab-workflow-windows-v0.2.0'
     manifest = {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
     with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
         for path in files:

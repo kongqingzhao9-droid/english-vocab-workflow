@@ -11,7 +11,7 @@
 | Skill | 功能 |
 | --- | --- |
 | `vocab-kit-setup` | 配置环境、来源、登录和空白私人网站 |
-| `vocab-kit-ielts` | 主动收录标注 PDF，保留原文件 |
+| `vocab-kit-ielts` | 使用“收录试卷词汇”处理标注 PDF，保留原文件 |
 | `vocab-kit-other` | 主动收录指定对话新增目标词，首次只记起点 |
 
 它们位于 `.agents/skills/`，随本项目使用，不覆盖你已有的全局 skill。
@@ -40,7 +40,7 @@ tests/                独立临时目录中的合成数据测试
 
 ```powershell
 python -B -m unittest discover -s tests -v
-python -B scripts/package_release.py --output ../vocab-workflow-windows-v0.1.0.zip
+python -B scripts/package_release.py --output ../vocab-workflow-windows-v0.2.0.zip
 ```
 
 界面测试需要 Node 和 Playwright，仅供维护者检查，不是用户日常使用的依赖。详见 [验证说明](docs/VALIDATION.md) 和 [第三方说明](THIRD_PARTY_NOTICES.md)。

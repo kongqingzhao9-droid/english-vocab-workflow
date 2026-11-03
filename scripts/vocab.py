@@ -88,10 +88,54 @@ def conversation_id(value):
 
 
 def checkpoint(timestamp, message_id):
+    if not isinstance(message_id, str) or not message_id.strip():
+        raise ValueError('A stable source-message ID is required.')
+    if timestamp is None:
+        return {'timestamp': None, 'id': message_id}
     dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-    if dt.tzinfo is None or not message_id or not str(message_id).strip():
-        raise ValueError('A reliable source-message timestamp with timezone and message ID are required.')
-    return {'timestamp': dt.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z'), 'id': str(message_id)}
+    if dt.tzinfo is None:
+        raise ValueError('If supplied, a source-message timestamp must include its timezone.')
+    return {'timestamp': dt.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z'), 'id': message_id}
+
+
+def sources_file():
+    return ROOT / '.agents/skills/vocab-kit-setup/.local/sources.json'
+
+
+def source_values(folder, conversation):
+    return {'pdf_directory': str(Path(folder).resolve()),
+            'conversation_id': conversation_id(conversation)}
+
+
+def pin_sources(folder, conversation):
+    values = source_values(folder, conversation)
+    if not Path(values['pdf_directory']).is_dir():
+        raise ValueError('The confirmed PDF folder does not exist.')
+    existing = read_json(sources_file()) if sources_file().exists() else None
+    if local('config.json').exists():
+        current = config()
+        existing = {key: current[key] for key in values}
+    if existing is not None and existing != values:
+        raise ValueError('Existing sources differ. Refusing to change a source with saved progress.')
+    atomic(sources_file(), values)
+    print('Saved both confirmed sources in the setup skill’s local-only settings.')
+
+
+def find_pdf_folders(name):
+    if not name or Path(name).name != name or name in {'.', '..'}:
+        raise ValueError('Enter the folder name only.')
+    roots = {Path(os.environ[key]).resolve() for key in
+             ('OneDrive', 'OneDriveConsumer', 'OneDriveCommercial') if os.environ.get(key)}
+    roots.update(path.resolve() for path in Path.home().glob('OneDrive*') if path.is_dir())
+    matches = set()
+    errors = []
+    for root in sorted(roots):
+        for folder, dirs, _ in os.walk(root, followlinks=False, onerror=errors.append):
+            path = Path(folder)
+            if path.name.casefold() == name.casefold():
+                matches.add(str(path))
+    print(json.dumps({'matches': sorted(matches), 'search_complete': not errors,
+                      'roots_found': len(roots)}, ensure_ascii=False))
 
 
 def public_key(value):
@@ -111,15 +155,26 @@ def configure(args):
     url = args.supabase_url.rstrip('/')
     if not re.fullmatch(r'https://[a-z0-9]{20}\.supabase\.co', url):
         raise ValueError('This version requires a hosted Supabase project URL.')
-    c = {'version': 1, 'pdf_directory': str(Path(args.pdf_directory).resolve()),
-         'conversation_id': conversation_id(args.conversation), 'supabase_url': url,
+    pinned = read_json(sources_file()) if sources_file().exists() else None
+    if args.pdf_directory is not None or args.conversation is not None:
+        if not args.pdf_directory or not args.conversation:
+            raise ValueError('Supply both sources or use the saved sources.')
+        supplied = source_values(args.pdf_directory, args.conversation)
+        if pinned is not None and pinned != supplied:
+            raise ValueError('Supplied sources differ from the confirmed sources.')
+        sources = supplied
+    elif pinned is not None:
+        sources = pinned
+    else:
+        raise ValueError('Confirm and save the two sources first.')
+    c = {'version': 1, **sources, 'supabase_url': url,
          'public_key': public_key(args.public_key), 'owner_id': str(uuid.UUID(args.owner_id))}
     if local('config.json').exists():
         if config() != c:
             raise ValueError('Configuration already exists. Do not silently switch data sources or databases; use a new kit copy for this trial.')
         print('Configuration already current.')
         return
-    if state()['chat_checkpoint'] is not None:
+    if state()['chat_checkpoint'] is not None and pinned != sources:
         raise ValueError('Unexpected existing conversation checkpoint.')
     folder = Path(c['pdf_directory'])
     folder.mkdir(parents=True, exist_ok=True)
@@ -275,8 +330,16 @@ def apply_batch(path):
             raise ValueError('Initialize the correct conversation start first.')
         if source['previous'] != st['chat_checkpoint']:
             raise ValueError('Chat checkpoint changed; read from the saved boundary again.')
-        upper = checkpoint(source['upper']['timestamp'], source['upper']['id'])
-        if datetime.fromisoformat(upper['timestamp'].replace('Z', '+00:00')) < datetime.fromisoformat(st['chat_checkpoint']['timestamp'].replace('Z', '+00:00')):
+        upper = checkpoint(source['upper'].get('timestamp'), source['upper']['id'])
+        previous = st['chat_checkpoint']
+        if upper['id'] == previous['id']:
+            if batch['vocab'] or batch['sentences']:
+                raise ValueError('Cannot add entries without advancing the message boundary.')
+            print('No new source messages. Now run publish to check pending uploads.')
+            return
+        if upper['timestamp'] and previous.get('timestamp') and datetime.fromisoformat(
+            upper['timestamp'].replace('Z', '+00:00')
+        ) < datetime.fromisoformat(previous['timestamp'].replace('Z', '+00:00')):
             raise ValueError('Chat checkpoint cannot move backwards.')
     elif source['kind'] == 'pdf':
         name = str(uuid.UUID(source['manifest_id']))
@@ -399,15 +462,20 @@ def main():
     for command in ('doctor', 'init', 'prepare', 'build-site', 'site-zip', 'publish', 'status', 'probe', 'scan', 'show-state'):
         sub.add_parser(command)
     p = sub.add_parser('configure')
-    for key in ('pdf-directory', 'conversation', 'supabase-url', 'public-key', 'owner-id'):
+    p.add_argument('--pdf-directory'); p.add_argument('--conversation')
+    for key in ('supabase-url', 'public-key', 'owner-id'):
         p.add_argument('--' + key, required=True)
-    p = sub.add_parser('record-start'); p.add_argument('--timestamp', required=True); p.add_argument('--message-id', required=True)
+    p = sub.add_parser('pin-sources'); p.add_argument('--pdf-directory', required=True); p.add_argument('--conversation', required=True)
+    p = sub.add_parser('find-pdf-folder'); p.add_argument('--name', required=True)
+    p = sub.add_parser('record-start'); p.add_argument('--timestamp'); p.add_argument('--message-id', required=True)
     p = sub.add_parser('apply'); p.add_argument('--batch', required=True)
     args = parser.parse_args()
     if args.command == 'doctor':
         doctor(); return
     if args.command == 'show-state':
         print(json.dumps(state(), ensure_ascii=False, indent=2)); return
+    if args.command == 'find-pdf-folder':
+        find_pdf_folders(args.name); return
     with lock():
         if args.command == 'init':
             if local('state.json').exists():
@@ -415,8 +483,11 @@ def main():
             save_state({'version': 1, 'library': {'vocab': [], 'sentences': []}, 'chat_checkpoint': None, 'pdf_processed': {}})
             print('Empty personal library initialized. No sample words inserted.')
         elif args.command == 'configure': configure(args)
+        elif args.command == 'pin-sources': pin_sources(args.pdf_directory, args.conversation)
         elif args.command == 'record-start':
-            config(); st = state()
+            if not sources_file().exists():
+                config()
+            st = state()
             if st['chat_checkpoint'] is not None:
                 raise ValueError('A start point already exists; refusing to skip intervening messages.')
             st['chat_checkpoint'] = checkpoint(args.timestamp, args.message_id)

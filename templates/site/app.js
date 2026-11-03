@@ -182,7 +182,7 @@ window.startVocabApp = async function(payload, remote) {
       if (page < 1) page = 1;
       if (page > totalPages) page = totalPages;
       if (!list.length) {
-        grid.innerHTML = '<div class="empty">' + (mode === 'review' ? '还没有已背单词。完成学习后，它们会出现在这里。' : '你的生词本，从这里开始。<br>上传标注 PDF 后，在电脑 Codex 中发送“收录雅思词汇”；<br>在指定对话里询问新词后，发送“收录其他词汇”。<br>收录完成后刷新本页。') + '</div>';
+        grid.innerHTML = '<div class="empty">' + (mode === 'review' ? '还没有已背单词。完成学习后，它们会出现在这里。' : '你的生词本，从这里开始。<br>上传标注 PDF 后，在电脑 Codex 中发送“收录试卷词汇”；<br>在指定对话里询问新词后，发送“收录其他词汇”。<br>收录完成后刷新本页。') + '</div>';
         setPagerVisible(false);
         return;
       }

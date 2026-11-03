@@ -14,7 +14,7 @@
     "kind": "chat",
     "conversation_id": "与配置一致的对话UUID",
     "previous": {"timestamp": "当前checkpoint的原始时间字符串", "id": "当前checkpoint的原始ID"},
-    "upper": {"timestamp": "读取开始时最新来源消息的真实UTC时间", "id": "该消息真实ID"},
+    "upper": {"timestamp": null, "id": "该消息真实ID"},
     "complete": true
   },
   "vocab": [
@@ -36,7 +36,7 @@ PDF 批次只替换 source：
 {"kind": "pdf", "manifest_id": "scan生成的批次UUID", "complete": true}
 ```
 
-complete 表示整个批次已读完，所有标记都已生成词条或确认重复。图片没看完、OCR 有缺口、对话没读到旧边界时不能标 true。不要用模型推测的消息时间生成上界。
+complete 表示整个批次已读完，所有标记都已生成词条或确认重复。图片没看完、OCR 有缺口、对话没读到旧边界时不能标 true。消息 ID 是分页边界。只有工具提供逐条消息时间时才填写 timestamp，整轮完成时间不能代用。
 
 apply 会自动处理严格大小写重复，但词形变体（s/es/ed/d/ing 等）需要模型结合上下文核对后去重，避免把不同词误并。批次为空但已完整处理来源时也可以 apply，随后仍运行 publish。
 

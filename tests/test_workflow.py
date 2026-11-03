@@ -96,6 +96,56 @@ class WorkflowTests(unittest.TestCase):
         vocab.atomic(vocab.local('batch.json'), data); vocab.apply_batch(vocab.local('batch.json'))
         self.assertEqual(vocab.state()['chat_checkpoint']['id'], 'fractional')
 
+    def test_message_id_only_start_and_legacy_checkpoint_transition(self):
+        with patch('sys.argv', ['vocab.py', 'record-start', '--message-id', 'start-without-time']):
+            vocab.main()
+        self.assertEqual(vocab.state()['chat_checkpoint'], {'timestamp': None, 'id': 'start-without-time'})
+        self.assertEqual(vocab.state()['library']['vocab'], [])
+        self.baseline()
+        data = vocab.read_json(self.batch([word()]))
+        data['source']['upper'] = {'id': 'new-user-message'}
+        vocab.atomic(vocab.local('batch.json'), data)
+        vocab.apply_batch(vocab.local('batch.json'))
+        self.assertEqual(vocab.state()['chat_checkpoint'], {'timestamp': None, 'id': 'new-user-message'})
+        self.assertEqual(len(vocab.state()['library']['vocab']), 1)
+
+    def test_same_message_id_cannot_add_entries(self):
+        self.baseline()
+        data = vocab.read_json(self.batch([word()]))
+        data['source']['upper'] = {'id': data['source']['previous']['id']}
+        vocab.atomic(vocab.local('batch.json'), data)
+        before = vocab.local('state.json').read_bytes()
+        with self.assertRaises(ValueError):
+            vocab.apply_batch(vocab.local('batch.json'))
+        self.assertEqual(before, vocab.local('state.json').read_bytes())
+
+    def test_pin_sources_before_database_setup(self):
+        current = vocab.config()
+        vocab.local('config.json').unlink()
+        vocab.pin_sources(current['pdf_directory'], 'https://chatgpt.com/c/' + CHAT)
+        with patch('sys.argv', ['vocab.py', 'record-start', '--message-id', 'before-database']):
+            vocab.main()
+        with patch('sys.argv', ['vocab.py', 'configure', '--supabase-url', current['supabase_url'],
+                                '--public-key', current['public_key'], '--owner-id', OWNER]):
+            vocab.main()
+        self.assertEqual(vocab.config(), current)
+        self.assertEqual(vocab.state()['chat_checkpoint']['id'], 'before-database')
+        self.assertNotIn(vocab.sources_file(), package_release.source_files(self.root))
+
+    def test_pdf_folder_search_reports_duplicate_names(self):
+        one_drive = self.root / 'OneDrive'
+        first = one_drive / 'Personal' / 'PDF Inbox'
+        second = one_drive / 'Study' / 'PDF Inbox'
+        first.mkdir(parents=True)
+        second.mkdir(parents=True)
+        output = io.StringIO()
+        with patch.dict(os.environ, {'OneDrive': str(one_drive)}, clear=True):
+            with patch.object(Path, 'home', return_value=self.root), contextlib.redirect_stdout(output):
+                vocab.find_pdf_folders('pdf inbox')
+        result = json.loads(output.getvalue())
+        self.assertEqual(set(result['matches']), {str(first), str(second)})
+        self.assertTrue(result['search_complete'])
+
     def test_no_baseline_refuses_historical_import(self):
         with self.assertRaises(ValueError): vocab.apply_batch(self.batch([word()]))
         self.assertEqual(vocab.state()['library']['vocab'], [])

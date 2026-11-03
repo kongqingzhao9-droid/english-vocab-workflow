@@ -1,4 +1,4 @@
 interface:
-  display_name: "收录雅思词汇（独立版）"
+  display_name: "收录试卷词汇（独立版）"
   short_description: "处理本项目 OneDrive 来源中的标注 PDF 并自动上传私人词库"
-  default_prompt: "使用 $vocab-kit-ielts 收录雅思词汇并同步到私人网站。"
+  default_prompt: "使用 $vocab-kit-ielts 收录试卷词汇并同步到私人网站。"
