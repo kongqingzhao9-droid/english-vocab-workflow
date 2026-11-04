@@ -37,7 +37,7 @@ python scripts/vocab.py probe
 python scripts/vocab.py publish
 ```
 
-status 必须确认授权，probe 必须确认词库和状态表匿名请求被拒绝、无效上传凭证被拒绝，空词库 publish 应得到 Already current 或 Uploaded and verified。失败保留配置，不自动重试或重置授权。网络恢复后由用户主动再试。
+status 必须确认授权，probe 必须确认词库和状态表匿名请求被拒绝、无效上传凭证被拒绝，空词库 publish 应得到 Already current 或 Uploaded and verified。遇到连接权限拒绝时按 [同步流程](SYNC.md) 请求只读检查，检查通过后完成尚未通过的步骤。其余错误按实际结果排查，保留已完成的配置。
 
 ## 3. 发布自己的登录页面
 

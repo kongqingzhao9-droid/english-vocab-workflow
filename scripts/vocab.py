@@ -5,7 +5,9 @@ import contextlib
 import ctypes
 from ctypes import wintypes
 from datetime import datetime, timezone
+import errno
 import hashlib
+from http.client import HTTPException
 import importlib.util
 import json
 import os
@@ -13,6 +15,8 @@ from pathlib import Path
 import re
 import secrets
 import shutil
+import socket
+import ssl
 import subprocess
 import sys
 from urllib.error import HTTPError, URLError
@@ -223,6 +227,26 @@ class NoRedirect(HTTPRedirectHandler):
         return None
 
 
+def network_failure(error):
+    reason = error.reason if isinstance(error, URLError) else error
+    winerror = getattr(reason, 'winerror', None)
+    code = winerror or getattr(reason, 'errno', None)
+    if isinstance(reason, ssl.SSLError):
+        label, detail = 'NETWORK_TLS', 'TLS connection failed'
+    elif isinstance(reason, socket.gaierror) or code in (11001, 11002, 11003, 11004):
+        label, detail = 'NETWORK_DNS', 'Could not resolve the server address'
+    elif code == 10013 or isinstance(reason, PermissionError) or code in (errno.EACCES, errno.EPERM):
+        label, detail = 'NETWORK_ACCESS_DENIED', 'Local connection permission denied'
+    elif isinstance(reason, TimeoutError) or code in (errno.ETIMEDOUT, 10060):
+        label, detail = 'NETWORK_TIMEOUT', 'Connection or response timed out'
+    else:
+        label, detail = 'NETWORK_CONNECTION', 'Connection or response failed'
+    if isinstance(code, int):
+        error_name = 'WinError' if winerror or code == 10013 else 'error'
+        detail += f' ({error_name} {code})'
+    return ValueError(f'{label}: {detail}. Local data and progress retained. No automatic retry.')
+
+
 def api(path, body=None):
     c = config()
     headers = {'apikey': c['public_key'], 'Content-Type': 'application/json', 'Cache-Control': 'no-store'}
@@ -237,8 +261,8 @@ def api(path, body=None):
         code = error.code
         error.close()
         raise ValueError(f'API HTTP {code}; local data and progress retained. No automatic retry.') from None
-    except (URLError, TimeoutError):
-        raise ValueError('Network failure; local data and progress retained. No automatic retry.') from None
+    except (OSError, HTTPException) as error:
+        raise network_failure(error) from None
 
 
 def publish(status_only=False):

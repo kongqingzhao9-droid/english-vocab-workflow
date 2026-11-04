@@ -34,13 +34,13 @@ tests/                独立临时目录中的合成数据测试
 .local/               运行后生成；私人数据，Git 忽略，不随发行包分发
 ```
 
-日常收录只更新私人数据库，不向 GitHub 推送词库。上传失败保留本地结果，下次主动收录时补传。不要把配置完成后的工作目录重新打包给别人；使用 `scripts/package_release.py` 生成干净发行包。
+日常收录更新私人数据库。连接权限被拒绝时，Codex 会先按授权流程只读检查，检查通过后继续同步一次。其他网络故障保留本地结果，恢复后补传。详见 [同步流程](docs/SYNC.md)。分享源码时，用 `scripts/package_release.py` 生成干净发行包。
 
 ## 开发验证
 
 ```powershell
 python -B -m unittest discover -s tests -v
-python -B scripts/package_release.py --output ../vocab-workflow-windows-v0.2.0.zip
+python -B scripts/package_release.py --output ../vocab-workflow-windows-v0.2.1.zip
 ```
 
 界面测试需要 Node 和 Playwright，仅供维护者检查，不是用户日常使用的依赖。详见 [验证说明](docs/VALIDATION.md) 和 [第三方说明](THIRD_PARTY_NOTICES.md)。

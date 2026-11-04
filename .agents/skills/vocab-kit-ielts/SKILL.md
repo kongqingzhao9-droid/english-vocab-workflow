@@ -13,6 +13,6 @@ description: 在已配置的本生词本工作流项目中，用户主动说“�
 4. 与 `.local/state.json` 的已有词、本批候选去重，忽略大小写，并结合语义核对 s/es/ed/d/ing 等变体，例如 construed 和 construe。不要机械去后缀误合并不同词。保留已有词条及顺序，网页中的星级、已背和删除状态不能被收录覆盖。
 5. 根据 schema 生成完整词条和长难句解析，按 PDF 时间顺序排列。例句优先来自原文，需明确是自拟例句时不要冒称真题。词根词缀不得强行拆解；无合适拆分可注明整体记忆。
 6. 写 `.local/batch.json`，source 使用 `kind: "pdf"`、scan 返回的 `manifest_id`、`complete: true`；vocab 和 sentences 包含新增条目，已确认重复可不填。只有本批所有 PDF 与渲染/OCR 核对完成才标记 complete。执行 `scripts/vocab.py apply --batch .local/batch.json`，原子保存词库与本批处理进度。文件处理中发生改变会拒绝推进，此时重新扫描核对；失败不能手工改进度绕过。
-7. 执行 `scripts/vocab.py publish`。只有 Uploaded and verified 或 Already current 才报告已同步，提示刷新私人网页。网络、授权或追加冲突失败时保留本地词库和已提交进度，报告待上传，不自动重试、不推送公开 Git，也不重建 SQL 绕过。下次即使无新 PDF 也再次调用 publish。
+7. 按 [同步流程](../../../docs/SYNC.md) 执行 `scripts/vocab.py publish`，无新 PDF 时也检查补传。遇到 `NETWORK_ACCESS_DENIED`，先在正常授权流程下做一次只读 status 检查，通过后继续同步一次。其他故障按错误类型处理，保留已保存的词库和试卷进度。
 
 保留原 PDF，不删除或移动；不创建自动化任务。报告新增词/句、重复项和无法确认的标记，不把未读页视为无词。

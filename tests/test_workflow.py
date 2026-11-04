@@ -4,10 +4,13 @@ import io
 import json
 import os
 from pathlib import Path
+import socket
+import ssl
 import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import vocab
@@ -179,13 +182,54 @@ class WorkflowTests(unittest.TestCase):
         c = vocab.config(); c['supabase_url'] = 'https://' + 'b' * 20 + '.supabase.co'; vocab.atomic(vocab.local('config.json'), c)
         with self.assertRaises(ValueError): vocab.credential()
 
-    def test_upload_failure_retains_local_batch_and_does_not_retry(self):
+    def test_access_denied_retains_batch_then_read_only_check_and_verified_upload(self):
         self.baseline(); vocab.apply_batch(self.batch([word()]))
-        before = vocab.local('state.json').read_bytes()
-        with patch.object(vocab, 'credential', return_value='test-only'), patch.object(vocab, 'api', side_effect=ValueError('network')) as api:
-            with self.assertRaises(ValueError): vocab.publish()
-            self.assertEqual(api.call_count, 1)
-        self.assertEqual(before, vocab.local('state.json').read_bytes())
+        local_state = vocab.local('state.json').read_bytes()
+        permission_error = PermissionError('sensitive diagnostic')
+        permission_error.winerror = 10013
+        before = dict(hash='old', words=0, sentences=0)
+        after = dict(hash='new', words=1, sentences=0)
+        with patch.object(vocab, 'credential', return_value='test-only'), patch.object(vocab, 'build_opener') as opener:
+            request = opener.return_value.open
+            request.side_effect = [URLError(permission_error)] + [
+                io.BytesIO(json.dumps(response).encode()) for response in (before, before, after, after)
+            ]
+            with self.assertRaisesRegex(ValueError, r'NETWORK_ACCESS_DENIED: .*WinError 10013') as error:
+                vocab.publish()
+            self.assertNotIn('sensitive diagnostic', str(error.exception))
+            self.assertEqual(request.call_count, 1)
+            self.assertFalse(vocab.local('last_upload.json').exists())
+
+            vocab.publish(status_only=True)
+            self.assertEqual(request.call_count, 2)
+            self.assertFalse(vocab.local('last_upload.json').exists())
+            self.assertEqual(vocab.local('state.json').read_bytes(), local_state)
+
+            vocab.publish()
+            sent = [call.args[0] for call in request.call_args_list]
+            self.assertEqual([req.full_url.rsplit('/', 1)[-1] for req in sent],
+                             ['vocab_kit_publish_status'] * 3 + ['vocab_kit_publish', 'vocab_kit_publish_status'])
+            for req in sent[:3] + sent[4:]:
+                self.assertEqual(set(json.loads(req.data)), {'p_token'})
+        self.assertEqual(vocab.local('state.json').read_bytes(), local_state)
+        self.assertEqual(vocab.read_json(vocab.local('last_upload.json')), after)
+
+    def test_other_network_errors_and_http_rejections_remain_distinct(self):
+        url = self.root.as_uri()
+        cases = [
+            (URLError(socket.gaierror(11001, 'sensitive diagnostic')), 'NETWORK_DNS'),
+            (URLError(TimeoutError('sensitive diagnostic')), 'NETWORK_TIMEOUT'),
+            (ssl.SSLError(1, 'sensitive diagnostic'), 'NETWORK_TLS'),
+            (ConnectionResetError('sensitive diagnostic'), 'NETWORK_CONNECTION'),
+            (HTTPError(url, 403, 'sensitive diagnostic', {}, None), 'API HTTP 403'),
+        ]
+        with patch.object(vocab, 'build_opener') as opener:
+            for failure, expected in cases:
+                with self.subTest(expected=expected):
+                    opener.return_value.open.side_effect = failure
+                    with self.assertRaisesRegex(ValueError, expected) as error:
+                        vocab.api('rpc/vocab_kit_publish_status')
+                    self.assertNotIn('sensitive diagnostic', str(error.exception))
 
     def test_upload_requires_matching_ack_and_second_status_check(self):
         self.baseline(); vocab.apply_batch(self.batch([word()]))
